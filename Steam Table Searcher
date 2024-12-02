@@ -1,0 +1,51 @@
+# Limits: up to 800 degrees celsius and 1000 bar
+
+from iapws import IAPWS97
+from iapws.iapws97 import _PSat_T  # Import the function for saturation pressure
+import math
+
+def calculate_properties(temperature_celsius, pressure_kpa):
+    temperature_k = temperature_celsius + 273.15
+    pressure_mpa = pressure_kpa / 1000
+    pressure_bar = pressure_kpa / 100
+    water = IAPWS97(T=temperature_k, P=pressure_mpa)
+
+    enthalpy = water.h  # (kJ/kg)
+    entropy = water.s   # (kJ/kg-K)
+    density = water.rho # (kg/m^3)
+    specific_volume = 1 / water.rho  # (m^3/kg)
+
+    saturation_pressure = _PSat_T(temperature_k)  # MPa
+    saturation_pressure_kpa = saturation_pressure * 1000  # Convert to kPa
+
+    if abs(pressure_mpa - saturation_pressure) <= 0.01:
+        state = "VLE (Vapor-Liquid Equilibrium)"
+        fugacity = saturation_pressure_kpa
+        fugacity_coefficient = 1
+    elif pressure_mpa > saturation_pressure:
+        state = "Liquid"
+        volume_liquid = 1 / water.rho  # (m^3/kg)
+        R = 8.314  # J/(mol*K)
+        fugacity = saturation_pressure_kpa * math.exp((volume_liquid * (pressure_kpa - saturation_pressure_kpa)) / (R * temperature_k)) # Poynting equation
+        fugacity_coefficient = fugacity / pressure_kpa
+    else:
+        state = "Vapor"
+        if pressure_bar <= 10:
+            fugacity = pressure_kpa
+            fugacity_coefficient = 1
+        else:
+            B = -160
+            B_m3_kg = B * 1e-6 # m^3/kg
+            fugacity = pressure_kpa * math.exp((B_m3_kg * pressure_kpa) / (R * temperature_k))
+            fugacity_coefficient = fugacity / pressure_kpa
+
+    return enthalpy, entropy, density, specific_volume, state, saturation_pressure_kpa, fugacity, fugacity_coefficient
+
+temperature_celsius = float(input("Enter temperature in Celsius: "))
+pressure_kpa = float(input("Enter pressure in kPa: "))
+enthalpy, entropy, density, specific_volume, state, saturation_pressure_kpa, fugacity, fugacity_coefficient = calculate_properties(temperature_celsius, pressure_kpa)
+
+print(f"Temperature: {temperature_celsius}°C | Pressure: {pressure_kpa} kPa | Saturation Pressure: {saturation_pressure_kpa:.2f} kPa | "
+      f"State: {state} | Enthalpy: {enthalpy:.2f} kJ/kg | Entropy: {entropy:.2f} kJ/kg-K | "
+      f"Density: {density:.2f} kg/m^3 | Specific Volume: {specific_volume:.5f} m^3/kg | "
+      f"Fugacity: {fugacity:.2f} kPa | Fugacity Coefficient: {fugacity_coefficient:.4f}")
